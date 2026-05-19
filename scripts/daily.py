@@ -361,8 +361,10 @@ def compose_recovery(recovery: dict) -> str:
 def compose_training(activities: list, target_date: str) -> str:
     """Build the 'last 7 days through D-1' section."""
     target = datetime.fromisoformat(target_date).date()
-    # 7-day rolling window ending at D inclusive
-    week_start = target - timedelta(days=6)
+    # Load-context window: 7 days strictly *before* D. D itself is reported
+    # in its own "Today's session" block, so excluding D here avoids logging
+    # the same ride twice in the same entry.
+    week_start = target - timedelta(days=7)
     relevant = []
     for a in activities:
         d_str = (a.get("startTimeLocal") or "")[:10]
@@ -372,11 +374,11 @@ def compose_training(activities: list, target_date: str) -> str:
             d = datetime.fromisoformat(d_str).date()
         except ValueError:
             continue
-        if week_start <= d <= target:
+        if week_start <= d < target:
             relevant.append((d, a))
     relevant.sort(key=lambda x: x[0])
 
-    lines = ["## Training from Garmin (last 7 days)"]
+    lines = ["## Training context (prior 7 days)"]
     if not relevant:
         lines.append("_No activity data for the last 7 days._")
         return "\n".join(lines)

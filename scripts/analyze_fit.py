@@ -23,11 +23,6 @@ from ride_analysis import (
     zone_distribution,
 )
 
-# Fixed power band for the HR-drift / decoupling test. Roughly Z2 for the
-# repo owner's FTP; should ideally be derived from POWER_ZONES Z2 so it
-# scales with FTP — see TODO at the call site below.
-HR_DRIFT_BAND = (130, 160)
-
 _args = build_argparser(__doc__.splitlines()[0], "Path to .fit file", with_hr_max=True).parse_args()
 _athlete = load_athlete()
 FIT_PATH = _args.path
@@ -37,6 +32,10 @@ HR_MAX = _args.hr_max if _args.hr_max is not None else _athlete.get("hr_max_bpm_
 
 POWER_ZONES = build_power_zones(_athlete, FTP)
 HR_ZONES = build_hr_zones(HR_MAX)
+
+# HR-drift / decoupling test band = Z2 endurance (POWER_ZONES[1]). Scales
+# with FTP — no hardcoded watts.
+HR_DRIFT_BAND = (POWER_ZONES[1][1], POWER_ZONES[1][2])
 
 fit = FitFile(FIT_PATH)
 records = []
@@ -101,7 +100,6 @@ avg_hr = statistics.mean(hr_vals)
 max_hr = max(hr_vals)
 hz_time = zone_distribution(hr_vals, HR_ZONES) if HR_ZONES else {}
 
-# TODO: derive HR_DRIFT_BAND from POWER_ZONES Z2 so it tracks FTP changes
 hr_drift_msg = format_hr_drift(
     hr_drift(power, hr, moving_idx, *HR_DRIFT_BAND),
     *HR_DRIFT_BAND,

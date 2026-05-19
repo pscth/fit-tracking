@@ -1,12 +1,12 @@
 # fit-tracking
 
-**A morning briefing for athletes who don't want to juggle apps.**
+**A daily training diary for athletes who don't want to juggle apps.**
 
-Every morning at 07:30, this repo pulls your overnight data from Garmin,
-Strava, and Withings; runs proper power analysis on yesterday's ride
-(Normalized Power, IF, TSS, HR drift, Pw:HR decoupling); composes a structured
-diary entry; and writes it to `diary/YYYY-MM-DD.md`. By the time you finish
-your coffee, your training picture is in one file.
+Every night, this repo pulls today's data from Garmin, Strava, and Withings;
+runs proper power analysis on the day's ride (Normalized Power, IF, TSS, HR
+drift, Pw:HR decoupling); composes a structured diary entry; and writes it
+to `diary/YYYY-MM-DD.md`. The day's training picture lands in one file
+before you go to bed — settled metrics, no morning copy-paste.
 
 Designed to pair with [Claude Code](https://claude.com/claude-code) — the
 included `training-diary` skill turns a "write today's diary" message into a
@@ -15,7 +15,7 @@ fully standalone for unattended use (cron / launchd / Raspberry Pi).
 
 ---
 
-## What a morning briefing looks like
+## What a daily entry looks like
 
 A real entry, abridged for the README. `scripts/daily.py` writes this whole
 thing to `diary/2026-05-19.md` with no manual entry — every number is pulled
@@ -52,7 +52,7 @@ from a data source.
 
 ```
 scripts/
-├── daily.py           # The unattended morning briefing — orchestrates everything below
+├── daily.py           # The unattended end-of-day diary — orchestrates everything below
 ├── garmin_recovery.py # Today's RHR / HRV / Sleep / Body Battery / Training Readiness
 ├── garmin_fetch.py    # Download activity FITs from Garmin Connect
 ├── garmin_auth.py     # First-time Garmin auth (handles MFA)
@@ -172,7 +172,7 @@ python3 scripts/strava_fetch.py recent --n 10
 
 ---
 
-## The daily briefing
+## The daily diary
 
 Once at least one integration is wired up:
 
@@ -257,7 +257,7 @@ report).
 
 | Script | What it does |
 |---|---|
-| `daily.py` | Full morning briefing → writes `diary/YYYY-MM-DD.md` |
+| `daily.py` | Full end-of-day diary → writes `diary/YYYY-MM-DD.md` |
 | `garmin_recovery.py` | Today's recovery (TR / HRV / Sleep / RHR / Body Battery) |
 | `garmin_fetch.py` | Download activity FIT or TCX by date / ID |
 | `garmin_auth.py` | First-time Garmin OAuth (MFA handled) |
@@ -351,5 +351,5 @@ nothing to do. Skip to using `daily.py`.
 
 ---
 
-That's the whole thing. Three steps to a working morning briefing — then
-forget about it and let cron deliver every day.
+That's the whole thing. Three steps to a working daily diary — then
+forget about it and let cron deliver every night.

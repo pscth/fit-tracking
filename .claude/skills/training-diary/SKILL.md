@@ -33,7 +33,7 @@ A diary entry for date **D** is anchored to a single date:
 
 The unattended `scripts/daily.py` runs at end-of-day, so D is always settled when written. For ad-hoc / backfill work (regenerate a missed day, rewrite a past entry, mid-day status check), use the interactive `training-diary` skill in a Claude session — those flows can reason about partial in-flight metrics if needed.
 
-Do **not** mix D-1 lookback into D's training section. The 7-day training summary table, when included for load-context, ends at D inclusive — not D-1.
+**Training table vs Today's session.** D's actual ride/session goes in its own "Today's session" block (with the detailed analysis). The 7-day training table is *load-context only* — D-7 through D-1, excluding D — so the same ride is never logged twice in the same entry.
 
 ## Diary file naming convention
 Persist entries to `diary/` at the repo root (create the directory if missing):
@@ -130,7 +130,7 @@ For each diary request:
 
 1. Determine the target date D. If unspecified, use today in the user's timezone.
 2. Read `ATHLETE.md` to identify the active goal, current phase (per the phase logic), and applicable rules.
-3. Pull activity data for D (the day the diary covers). For context, also pull D-6..D-1 to build a 7-day rolling load summary that ends at D inclusive.
+3. Pull activity data for D (the day the diary covers) — this goes in the "Today's session" block. For load context, also pull D-7..D-1 to build the 7-day rolling table (excludes D, avoids double-logging).
 4. Pull body-composition metrics for D and D-6..D-1 (for the trend).
 5. Pull recovery metrics for D (RHR / HRV / sleep / Training Readiness / Body Battery — all this-morning readings).
 6. Compare D's weight against:
@@ -157,8 +157,8 @@ Use this format for the daily training diary:
 - Body composition (when available): BF% / fat mass / lean mass
 - Event countdown: X days to [active goal from ATHLETE.md]
 
-## Training from <source>
-[D's session detail (if any) + 7-day summary table ending at D inclusive]
+## Training context (prior 7 days)
+[7-day summary table for D-7..D-1 — load context only, excludes D]
 
 ## Recovery (Withings + Garmin)
 - Sleep: X (stages + score)

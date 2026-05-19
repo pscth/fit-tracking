@@ -12,6 +12,7 @@ from ride_analysis import (
     MOVING_SPEED_THRESHOLD,
     best_mean_power,
     build_argparser,
+    build_power_zones,
     format_duration,
     format_hr_drift,
     hr_drift,
@@ -21,15 +22,16 @@ from ride_analysis import (
     training_stress,
 )
 
-# Fixed power band for the HR-drift / decoupling test. Should ideally derive
-# from POWER_ZONES Z2 to scale with FTP — see TODO at the call site below.
-HR_DRIFT_BAND = (130, 170)
-
 _args = build_argparser(__doc__.splitlines()[0], "Path to .tcx file").parse_args()
 _athlete = load_athlete()
 TCX = _args.path
 FTP = _args.ftp if _args.ftp is not None else _athlete.get("ftp")
 WEIGHT = _args.weight if _args.weight is not None else _athlete.get("weight")
+
+# HR-drift / decoupling test band = Z2 endurance from athlete.json's
+# power_zones_w (or FTP-derived if absent). Scales with FTP.
+_POWER_ZONES = build_power_zones(_athlete, FTP)
+HR_DRIFT_BAND = (_POWER_ZONES[1][1], _POWER_ZONES[1][2])
 
 NS = {
     "tcd": "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2",
@@ -114,7 +116,6 @@ max_hr = max(hr_vals) if hr_vals else 0
 cad_vals = [r.get("cadence") for r in records if r.get("cadence") and r.get("cadence") > 30]
 avg_cad = statistics.mean(cad_vals) if cad_vals else 0
 
-# TODO: derive HR_DRIFT_BAND from POWER_ZONES Z2 so it tracks FTP changes
 _drift = hr_drift(power, hr_full, moving_idx, *HR_DRIFT_BAND)
 if _drift is None:
     hr_drift_msg = "(insufficient samples)"
