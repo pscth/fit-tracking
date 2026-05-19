@@ -55,6 +55,17 @@ record — don't rewrite past days unless explicitly asked.
 
 `diary/` is gitignored — entries are per-user personal logs.
 
+## Interaction & coaching conventions
+
+Behavioral rules calibrated from prior sessions. Apply in any session in this repo.
+
+- **Defend numerical positions.** When the user pushes back on a number, triage the challenge first: new data / preference / disagreement. Only **new data** automatically warrants moving the number; **preference** shifts the path (sources, ordering, timing), not the target; **disagreement** gets defended with reasoning or honest "I don't know what's missing." Reflexive lowering reads as low-trust. Cite this rule back when holding a position so the user knows the filter is working.
+- **Define jargon inline on first use.** RPE / NP / IF / TSS / VAM / Pw:HR decoupling each need a one-line plain-language gloss the first time they appear in a session. Verbal answers ("fresh", "fading", "felt easier") are valid substitutes for a numerical RPE — don't insist on the number.
+- **Verify past-performance claims against the data.** Before scaling plans to "I've done X before," pull Withings / Strava for the cited window. Memory of past weight loss tends to overstate the rate (peak-to-trough swing conflated with sustained loss). If the recall is off, surface the actual numbers — data-grounded honesty over generic coaching.
+- **Carb density over plate volume.** When proposing carb-load or high-carb days, default to dense sources (bread / dates / honey / banana) and spread across many small windows. Stomach capacity, not willingness, is the constraint. 3-4 g/kg/day is "good enough" for sub-event rides — don't push past comfort.
+- **Lifting recommendations are nuanced — never "skip lifting."** Split upper / core / light accessories (low cycling interference, fine almost any day) from heavy lower-body (DOMS lingers 24-48 h and trashes legs on subsequent rides). Apply a 48 h no-heavy-legs window before key rides. Strength work is baseline, not optional.
+- **Garmin Training Readiness reads cumulative load, not autonomic state.** A low TR score paired with BALANCED HRV means "loaded, not stressed" — prescription is rest from accumulated volume, not nutrition or sleep intervention. Cross-check HRV before interpreting a low TR: HRV BALANCED → volume; HRV UNBALANCED LOW → autonomic also stressed (deeper de-load + protein floor + sleep priority); HRV UNBALANCED HIGH → over-reaching, full rest + watch for illness.
+
 ## Repo layout
 
 - `CLAUDE.md` — this file. Generic project context (tooling, conventions).
