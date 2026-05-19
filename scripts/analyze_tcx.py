@@ -21,8 +21,7 @@ def load_athlete():
 
 
 _ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-_ap.add_argument("path", nargs="?", default="/Users/lluis.diaz/Downloads/activity_22909408226.tcx",
-                 help="Path to .tcx file")
+_ap.add_argument("path", help="Path to .tcx file")
 _ap.add_argument("--ftp", type=int, help="Override FTP from athlete.json")
 _ap.add_argument("--weight", type=float, help="Override weight (kg) from athlete.json")
 _args = _ap.parse_args()

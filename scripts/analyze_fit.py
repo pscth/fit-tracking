@@ -25,8 +25,7 @@ def load_athlete():
 
 
 _ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-_ap.add_argument("path", nargs="?", default="/Users/lluis.diaz/Downloads/Morning_Ride.fit",
-                 help="Path to .fit file")
+_ap.add_argument("path", help="Path to .fit file")
 _ap.add_argument("--ftp", type=int, help="Override FTP from athlete.json")
 _ap.add_argument("--weight", type=float, help="Override weight (kg) from athlete.json")
 _args = _ap.parse_args()
