@@ -184,10 +184,13 @@ Writes `diary/YYYY-MM-DD.md` for today. With more sources configured, more
 sections fill in. With none, the script errors out clearly telling you what's
 missing.
 
+The diary always covers *today* — there's no date selector. For ad-hoc or
+backfill cases (regenerate a missed day, mid-day status check), use the
+interactive Claude flow via the `training-diary` skill instead.
+
 Common variants:
 
 ```bash
-python3 scripts/daily.py 2026-05-19   # specific date
 python3 scripts/daily.py --dry-run    # preview, don't write
 python3 scripts/daily.py --force      # overwrite existing entry
 python3 scripts/daily.py --no-ride    # rest day (skip ride fetch + analysis)
@@ -195,9 +198,12 @@ python3 scripts/daily.py --no-ride    # rest day (skip ride fetch + analysis)
 
 ### Schedule it
 
+Run end-of-day so the day's metrics are settled by the time the entry is
+written (steps, intensity minutes, ride totals all final):
+
 ```cron
-# 07:30 local — write today's briefing
-30 7 * * *  cd /path/to/fit-tracking && /usr/bin/python3 scripts/daily.py 2>> diary/.daily.log
+# 23:30 local — write today's settled briefing
+30 23 * * *  cd /path/to/fit-tracking && /usr/bin/python3 scripts/daily.py 2>> diary/.daily.log
 ```
 
 After the one-time interactive auth, every refresh is automatic. `daily.py`

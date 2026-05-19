@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Fully unattended morning diary entry.
+"""Fully unattended end-of-day diary entry.
 
 Pulls today's data from Garmin Connect (recovery + activities) and Withings
 (weight + body comp + sleep), runs ride analysis if a ride is present, then
 composes a structured Markdown diary entry and writes it to `diary/YYYY-MM-DD.md`.
 
+The diary always covers *today* — the day is settled by the time cron runs in
+the evening. For ad-hoc or backfill cases, use the interactive `training-diary`
+skill (in a Claude session) instead.
+
 Designed for cron / launchd: no interactive prompts, no hard failures when a
 data source is unavailable (sections degrade gracefully).
 
 Usage:
-    python3 scripts/daily.py                # today's entry to diary/YYYY-MM-DD.md
-    python3 scripts/daily.py 2026-05-19     # specific date
-    python3 scripts/daily.py --dry-run      # print to stdout, don't write
-    python3 scripts/daily.py --force        # overwrite existing entry
-    python3 scripts/daily.py --no-ride      # skip ride fetch + analysis
+    python3 scripts/daily.py              # today's entry to diary/YYYY-MM-DD.md
+    python3 scripts/daily.py --dry-run    # print to stdout, don't write
+    python3 scripts/daily.py --force      # overwrite existing entry
+    python3 scripts/daily.py --no-ride    # skip ride fetch + analysis
 
 Setup: completes the standalone Garmin + Withings auth setup once (see README).
 Falls back gracefully if any source isn't configured.
@@ -96,6 +99,7 @@ def fetch_recovery(g, cdate: str) -> dict:
         "sleep": safe_call(g.get_sleep_data, cdate),
         "hrv": safe_call(g.get_hrv_data, cdate),
         "body_battery": safe_call(g.get_body_battery, cdate),
+        "stats": safe_call(g.get_stats, cdate),
     }
 
 
@@ -215,7 +219,7 @@ def fetch_withings_body(tokens, days: int = 7) -> list:
 # Composition
 # ----------------------------------------------------------------------------
 
-def compose_snapshot(target_date: str, withings_body: list, athlete: dict) -> str:
+def compose_snapshot(target_date: str, withings_body: list, athlete: dict, recovery: dict | None = None) -> str:
     lines = ["## Snapshot"]
 
     # Filter morning fasted readings (06:00-10:00 local)
@@ -248,6 +252,26 @@ def compose_snapshot(target_date: str, withings_body: list, athlete: dict) -> st
         delta = morning_series[-1]["weight_kg"] - morning_series[0]["weight_kg"]
         days = (morning_series[-1]["ts"] - morning_series[0]["ts"]).days or 1
         lines.append(f"- 7-day morning trend: {arrow} — net **{delta:+.2f} kg** over {days} days")
+
+    # Daily activity totals for the target date. Note: for cron runs at dawn
+    # writing today's diary, this will be near-zero (the day's just started).
+    stats = (recovery or {}).get("stats")
+    if isinstance(stats, dict) and "_error" not in stats:
+        steps = stats.get("totalSteps")
+        step_goal = stats.get("dailyStepGoal")
+        mod = stats.get("moderateIntensityMinutes") or 0
+        vig = stats.get("vigorousIntensityMinutes") or 0
+        im_goal = stats.get("intensityMinutesGoal")
+        if isinstance(steps, int):
+            parts = [f"**{steps:,} steps**" + (f" / {step_goal:,} goal" if isinstance(step_goal, int) else "")]
+            if mod or vig:
+                # Garmin weights vigorous 2× toward goal
+                im_weighted = mod + 2 * vig
+                parts.append(f"{im_weighted} intensity min" + (f" / {im_goal} weekly goal" if im_goal else "") + f" ({mod} mod + {vig} vig × 2)")
+            kcal = stats.get("activeKilocalories")
+            if isinstance(kcal, (int, float)):
+                parts.append(f"{kcal:.0f} active kcal")
+            lines.append(f"- Activity: " + " · ".join(parts))
 
     return "\n".join(lines)
 
@@ -337,8 +361,8 @@ def compose_recovery(recovery: dict) -> str:
 def compose_training(activities: list, target_date: str) -> str:
     """Build the 'last 7 days through D-1' section."""
     target = datetime.fromisoformat(target_date).date()
-    # Filter to last 7 days strictly before target_date
-    week_ago = target - timedelta(days=7)
+    # 7-day rolling window ending at D inclusive
+    week_start = target - timedelta(days=6)
     relevant = []
     for a in activities:
         d_str = (a.get("startTimeLocal") or "")[:10]
@@ -348,11 +372,11 @@ def compose_training(activities: list, target_date: str) -> str:
             d = datetime.fromisoformat(d_str).date()
         except ValueError:
             continue
-        if week_ago <= d < target:
+        if week_start <= d <= target:
             relevant.append((d, a))
     relevant.sort(key=lambda x: x[0])
 
-    lines = ["## Training from Garmin (through yesterday)"]
+    lines = ["## Training from Garmin (last 7 days)"]
     if not relevant:
         lines.append("_No activity data for the last 7 days._")
         return "\n".join(lines)
@@ -391,17 +415,18 @@ def compose_today_session(today_ride: dict | None, ride_analysis: str | None) ->
     return "\n".join(lines)
 
 
-def compose_nutrition(athlete: dict) -> str:
+def compose_nutrition(athlete: dict, target_date: str) -> str:
     protein = (athlete.get("protein_target_g_per_day") or {})
     protein_mod = protein.get("moderate_deficit", [160, 180])
+    next_day = (datetime.fromisoformat(target_date).date() + timedelta(days=1)).isoformat()
     return (
-        "## Nutrition target for tomorrow\n\n"
+        f"## Nutrition target for {next_day}\n\n"
         "_Auto-generated baseline — phase-specific adjustments from `ATHLETE.md` are not parsed by this script._\n\n"
-        "- **Protein:** {pmin}-{pmax} g/day (per `athlete.json`)\n"
+        f"- **Protein:** {protein_mod[0]}-{protein_mod[1]} g/day (per `athlete.json`)\n"
         "- **Carbs:** scale with training load — refer to ATHLETE.md operational defaults\n"
         "- **Hydration:** 2.5-3 L water (more on long ride days, +electrolytes)\n"
         "- **Refine in interactive session** for phase-specific deficit + carb-timing rules."
-    ).format(pmin=protein_mod[0], pmax=protein_mod[1])
+    )
 
 
 def compose_diary(target_date: str, athlete: dict, recovery: dict, activities: list,
@@ -411,7 +436,7 @@ def compose_diary(target_date: str, athlete: dict, recovery: dict, activities: l
         "",
         f"_Auto-generated by `scripts/daily.py`. Data sources: Garmin Connect + Withings + analyze_fit.py. Coach note + phase-specific guidance not auto-generated — refine in interactive Claude session if needed._",
         "",
-        compose_snapshot(target_date, withings_body, athlete),
+        compose_snapshot(target_date, withings_body, athlete, recovery),
         "",
         compose_training(activities, target_date),
         "",
@@ -419,7 +444,7 @@ def compose_diary(target_date: str, athlete: dict, recovery: dict, activities: l
         "",
         compose_today_session(today_ride, ride_analysis),
         "",
-        compose_nutrition(athlete),
+        compose_nutrition(athlete, target_date),
         "",
     ]
     return "\n".join(sections)
@@ -431,8 +456,6 @@ def compose_diary(target_date: str, athlete: dict, recovery: dict, activities: l
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("date", nargs="?", default=date.today().isoformat(),
-                    help="Target date YYYY-MM-DD (default today)")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print to stdout instead of writing diary/<date>.md")
     ap.add_argument("--force", action="store_true",
@@ -441,12 +464,7 @@ def main() -> None:
                     help="Skip ride fetch + analysis (rest day)")
     args = ap.parse_args()
 
-    target = args.date
-    try:
-        datetime.fromisoformat(target)
-    except ValueError:
-        sys.exit(f"Invalid date: {target}. Use YYYY-MM-DD.")
-
+    target = date.today().isoformat()
     diary_path = DIARY_DIR / f"{target}.md"
     if diary_path.exists() and not args.force and not args.dry_run:
         sys.exit(f"{diary_path} already exists. Use --force to overwrite or --dry-run to preview.")

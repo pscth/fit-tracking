@@ -91,11 +91,12 @@ def main() -> None:
     sleep = safe(g.get_sleep_data, cdate)
     hrv = safe(g.get_hrv_data, cdate)
     bb = safe(g.get_body_battery, cdate)
+    stats = safe(g.get_stats, cdate)
 
     if args.raw:
         print(json.dumps({
             "training_readiness": tr, "rhr": rhr, "sleep": sleep,
-            "hrv": hrv, "body_battery": bb,
+            "hrv": hrv, "body_battery": bb, "stats": stats,
         }, indent=2, default=str))
         return
 
@@ -184,6 +185,29 @@ def main() -> None:
                 kv(f"  {kind.title()} impact:", f"{sign}{impact}", f"  ({fb})" if fb and fb != "NONE" else "")
     else:
         print(f"(unavailable: {bb.get('_error', 'unknown') if is_err(bb) else 'no data'})")
+
+    # --- Activity & Steps ---
+    section("ACTIVITY & STEPS")
+    if not is_err(stats) and isinstance(stats, dict):
+        steps = stats.get("totalSteps")
+        step_goal = stats.get("dailyStepGoal")
+        kv("Steps:", f"{steps:,}" if isinstance(steps, int) else steps,
+           f" / {step_goal:,} goal" if isinstance(step_goal, int) else "")
+        dist_m = stats.get("totalDistanceMeters")
+        if isinstance(dist_m, (int, float)):
+            kv("Total distance:", f"{dist_m/1000:.2f} km", " (incl. cycling/running)")
+        mod = stats.get("moderateIntensityMinutes") or 0
+        vig = stats.get("vigorousIntensityMinutes") or 0
+        im_goal = stats.get("intensityMinutesGoal")
+        # Garmin weights vigorous 2× toward goal
+        im_weighted = mod + 2 * vig
+        kv("Intensity minutes:", f"{im_weighted}", f" / {im_goal} weekly goal  ({mod} mod + {vig} vig × 2)")
+        kv("Active kcal:", stats.get("activeKilocalories"))
+        floors = stats.get("floorsAscended")
+        if isinstance(floors, (int, float)) and floors > 0:
+            kv("Floors ascended:", int(floors))
+    else:
+        print(f"(unavailable: {stats.get('_error', 'unknown') if is_err(stats) else 'no data'})")
 
     print()
     print("(Re-run with --raw to dump full JSON responses for any field that shows '—')")

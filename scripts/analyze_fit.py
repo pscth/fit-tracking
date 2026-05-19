@@ -4,56 +4,39 @@
 FTP and weight are read from scripts/athlete.json (override with --ftp / --weight).
 """
 
-import argparse
-import json
-import sys
-from datetime import timedelta
 import statistics
-from pathlib import Path
 from fitparse import FitFile
 
-ATHLETE_FALLBACK = {"ftp": 210, "weight": 88.48}
+from ride_analysis import (
+    MOVING_SPEED_THRESHOLD,
+    best_mean_power,
+    build_argparser,
+    build_hr_zones,
+    build_power_zones,
+    format_duration as fmt,
+    format_hr_drift,
+    hr_drift,
+    intensity_factor,
+    load_athlete,
+    normalized_power,
+    training_stress,
+    zone_distribution,
+)
 
+# Fixed power band for the HR-drift / decoupling test. Roughly Z2 for the
+# repo owner's FTP; should ideally be derived from POWER_ZONES Z2 so it
+# scales with FTP — see TODO at the call site below.
+HR_DRIFT_BAND = (130, 160)
 
-def load_athlete():
-    cfg = Path(__file__).parent / "athlete.json"
-    if not cfg.exists():
-        return ATHLETE_FALLBACK
-    with open(cfg) as f:
-        data = json.load(f)
-    return {**ATHLETE_FALLBACK, **{k: v for k, v in data.items() if not k.startswith("_")}}
-
-
-_ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-_ap.add_argument("path", help="Path to .fit file")
-_ap.add_argument("--ftp", type=int, help="Override FTP from athlete.json")
-_ap.add_argument("--weight", type=float, help="Override weight (kg) from athlete.json")
-_args = _ap.parse_args()
-
+_args = build_argparser(__doc__.splitlines()[0], "Path to .fit file", with_hr_max=True).parse_args()
 _athlete = load_athlete()
 FIT_PATH = _args.path
-FTP = _args.ftp if _args.ftp is not None else _athlete["ftp"]
-WEIGHT = _args.weight if _args.weight is not None else _athlete["weight"]
+FTP = _args.ftp if _args.ftp is not None else _athlete.get("ftp")
+WEIGHT = _args.weight if _args.weight is not None else _athlete.get("weight")
+HR_MAX = _args.hr_max if _args.hr_max is not None else _athlete.get("hr_max_bpm_est")
 
-POWER_ZONES = [
-    ("Z1 Active recovery", 0, 110),
-    ("Z2 Endurance", 111, 150),
-    ("Z3 Tempo", 151, 180),
-    ("Z4 Threshold", 181, 210),
-    ("Z5 VO2max", 211, 240),
-    ("Z6 Anaerobic", 241, 300),
-    ("Z7 Sprint", 301, 99999),
-]
-HR_ZONES = [
-    ("Z1 Recovery", 0, 117),
-    ("Z2 Endurance", 118, 146),
-    ("Z3 Tempo", 147, 161),
-    ("Z4 Threshold", 162, 176),
-    ("Z5 VO2max", 177, 999),
-]
-
-def fmt(s):
-    return str(timedelta(seconds=int(s)))
+POWER_ZONES = build_power_zones(_athlete, FTP)
+HR_ZONES = build_hr_zones(HR_MAX)
 
 fit = FitFile(FIT_PATH)
 records = []
@@ -85,100 +68,44 @@ alt = [r.get("enhanced_altitude") for r in records]
 dist = [r.get("distance") for r in records]
 acc_pwr = [r.get("accumulated_power") for r in records]
 
-# Moving = speed > 0.5 m/s (~1.8 km/h)
-moving_mask = [s is not None and s > 0.5 for s in spd]
+moving_mask = [s is not None and s > MOVING_SPEED_THRESHOLD for s in spd]
 moving_idx = [i for i, m in enumerate(moving_mask) if m]
 moving_time = len(moving_idx)
 
 # Power stats over moving time (zero-fill missing)
 pmove = [power[i] if power[i] is not None else 0 for i in moving_idx]
-pall = [p if p is not None else 0 for p in power]
 avg_p = statistics.mean(pmove) if pmove else 0
 max_p = max(pmove) if pmove else 0
 nonzero_p = [p for p in pmove if p > 0]
 avg_p_pedaling = statistics.mean(nonzero_p) if nonzero_p else 0
 
-# NP: 30s rolling mean → 4th power → mean → 0.25 power
-rolling = []
-win = 30
-for i in range(len(pmove)):
-    s = max(0, i - win + 1)
-    seg = pmove[s:i+1]
-    rolling.append(sum(seg) / len(seg))
-np_val = (sum(p**4 for p in rolling) / len(rolling)) ** 0.25 if rolling else 0
-IF = np_val / FTP
-TSS = (moving_time * np_val * IF) / (FTP * 3600) * 100
+np_val = normalized_power(pmove)
+IF = intensity_factor(np_val, FTP)
+TSS = training_stress(np_val, moving_time, FTP)
 
-# Best efforts (sliding window mean power)
-def best_mean(series, window_s):
-    if len(series) < window_s:
-        return 0
-    cumsum = [0]
-    for v in series:
-        cumsum.append(cumsum[-1] + v)
-    best = 0
-    for i in range(window_s, len(cumsum)):
-        m = (cumsum[i] - cumsum[i-window_s]) / window_s
-        if m > best:
-            best = m
-    return best
-
-best_5s = best_mean(pmove, 5)
-best_1m = best_mean(pmove, 60)
-best_5m = best_mean(pmove, 300)
-best_20m = best_mean(pmove, 1200) if len(pmove) >= 1200 else 0
-best_60m = best_mean(pmove, 3600) if len(pmove) >= 3600 else 0
+best_5s = best_mean_power(pmove, 5)
+best_1m = best_mean_power(pmove, 60)
+best_5m = best_mean_power(pmove, 300)
+best_20m = best_mean_power(pmove, 1200) if len(pmove) >= 1200 else 0
+best_60m = best_mean_power(pmove, 3600) if len(pmove) >= 3600 else 0
 
 # Total work from accumulated_power (last - first)
 acc_valid = [a for a in acc_pwr if a is not None]
 total_kj = (acc_valid[-1] - acc_valid[0]) / 1000 if len(acc_valid) >= 2 else sum(pmove) / 1000
 
-# Power zones (moving time)
-pz_time = {z[0]: 0 for z in POWER_ZONES}
-pz_time["Coasting (0W)"] = 0
-for p in pmove:
-    if p == 0:
-        pz_time["Coasting (0W)"] += 1
-        continue
-    for name, lo, hi in POWER_ZONES:
-        if lo <= p <= hi:
-            pz_time[name] += 1
-            break
+pz_time = zone_distribution(pmove, POWER_ZONES, coast_bucket_name="Coasting (0W)")
 
 # HR stats
 hr_vals = [h for h in hr if h is not None]
 avg_hr = statistics.mean(hr_vals)
 max_hr = max(hr_vals)
-hz_time = {z[0]: 0 for z in HR_ZONES}
-for h in hr_vals:
-    for name, lo, hi in HR_ZONES:
-        if lo <= h <= hi:
-            hz_time[name] += 1
-            break
+hz_time = zone_distribution(hr_vals, HR_ZONES) if HR_ZONES else {}
 
-# HR drift / decoupling at fixed-power band
-band_idx = [i for i in moving_idx if power[i] is not None and 130 <= power[i] <= 160]
-hr_drift_msg = "(insufficient samples)"
-if len(band_idx) > 200:
-    h = len(band_idx) // 2
-    first_band = band_idx[:h]
-    second_band = band_idx[h:]
-    bf_p = statistics.mean([power[i] for i in first_band])
-    bs_p = statistics.mean([power[i] for i in second_band])
-    bf_h = statistics.mean([hr[i] for i in first_band if hr[i] is not None])
-    bs_h = statistics.mean([hr[i] for i in second_band if hr[i] is not None])
-    drift_bpm = bs_h - bf_h
-    drift_pct = drift_bpm / bf_h * 100
-    bf_wh = bf_p / bf_h
-    bs_wh = bs_p / bs_h
-    decoupling = (bf_wh - bs_wh) / bf_wh * 100
-    hr_drift_msg = (
-        f"In 130-160 W band ({len(band_idx)} sec):\n"
-        f"    First half:  power {bf_p:.0f} W, HR {bf_h:.0f} bpm  →  W/HR {bf_wh:.3f}\n"
-        f"    Second half: power {bs_p:.0f} W, HR {bs_h:.0f} bpm  →  W/HR {bs_wh:.3f}\n"
-        f"    HR drift:    {drift_bpm:+.1f} bpm ({drift_pct:+.1f}%)\n"
-        f"    Pw:HR decoupling: {decoupling:+.1f}%"
-    )
+# TODO: derive HR_DRIFT_BAND from POWER_ZONES Z2 so it tracks FTP changes
+hr_drift_msg = format_hr_drift(
+    hr_drift(power, hr, moving_idx, *HR_DRIFT_BAND),
+    *HR_DRIFT_BAND,
+)
 
 # Cadence
 cad_vals = [c for c in cad if c is not None and c > 30]
@@ -302,12 +229,15 @@ print(f"\n-- HEART RATE --")
 print(f"Avg HR:                 {avg_hr:.0f} bpm")
 print(f"Max HR:                 {max_hr} bpm")
 
-print(f"\n-- HR ZONES (all records) --")
-for name in [z[0] for z in HR_ZONES]:
-    secs = hz_time[name]
-    pct = secs / len(hr_vals) * 100 if hr_vals else 0
-    bar = "█" * int(pct/2)
-    print(f"  {name:18s} {fmt(secs):>9s}  {pct:5.1f}%  {bar}")
+if HR_ZONES:
+    print(f"\n-- HR ZONES (%HRmax, HRmax {HR_MAX} bpm) --")
+    for name in [z[0] for z in HR_ZONES]:
+        secs = hz_time[name]
+        pct = secs / len(hr_vals) * 100 if hr_vals else 0
+        bar = "█" * int(pct/2)
+        print(f"  {name:18s} {fmt(secs):>9s}  {pct:5.1f}%  {bar}")
+else:
+    print(f"\n-- HR ZONES -- skipped (set hr_max_bpm_est in athlete.json or pass --hr-max)")
 
 print(f"\n-- HR DRIFT (aerobic decoupling) --")
 print(f"  {hr_drift_msg}")
