@@ -1,0 +1,3 @@
+[submodule "kotr26"]
+	path = kotr26
+	url = https://github.com/ebowman/kotr26

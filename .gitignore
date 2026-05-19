@@ -1,0 +1,13 @@
+# Per-user data — never commit
+ATHLETE.md
+scripts/athlete.json
+scripts/cache/
+diary/
+
+# Local Claude Code settings (per-machine)
+.claude/settings.local.json
+
+# Python / OS noise
+__pycache__/
+*.pyc
+.DS_Store

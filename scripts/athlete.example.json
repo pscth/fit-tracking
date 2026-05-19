@@ -1,0 +1,28 @@
+{
+  "sex": "male",
+  "age": 35,
+  "height_cm": 178,
+  "weight": 75.0,
+  "ftp": 250,
+  "bmr_kcal": 1700,
+  "resting_hr_bpm": null,
+  "hr_max_bpm_est": 185,
+  "protein_target_g_per_day": {
+    "moderate_deficit": [120, 140],
+    "aggressive_deficit": [140, 160]
+  },
+  "power_zones_w": {
+    "z2_endurance": [140, 190],
+    "z3_tempo":     [191, 225],
+    "z4_threshold": [226, 260]
+  },
+  "_notes": {
+    "ftp": "Functional Threshold Power (W). Best determined by a real 20-min test (FTP = 0.95 * 20-min best). Update when retested.",
+    "weight": "Morning fasted (kg). Update when it drifts >~1 kg to keep W/kg displays honest.",
+    "bmr_kcal": "Mifflin-St Jeor formula: 10*kg + 6.25*cm - 5*age + 5 (male) / -161 (female). Recompute when weight drifts.",
+    "resting_hr_bpm": "Pull from Garmin via scripts/garmin_recovery.py or use null until you have a measurement.",
+    "hr_max_bpm_est": "Rough 220-age estimate. Replace with measured value when known (lab test or peak from hard intervals).",
+    "power_zones_w": "Coggan zones at the given FTP. Update with FTP changes. Format: [low, high] inclusive watts.",
+    "protein_target_g_per_day": "Range in grams. Use higher end when running aggressive deficit to preserve lean mass."
+  }
+}

@@ -1,0 +1,18 @@
+# Core ride analysis — required if you use scripts/analyze_fit.py
+fitparse>=1.2.0
+
+# Data source integrations — each is optional. Install only the ones you use.
+# (If you skip one, the corresponding script will fail at import-time with a
+# clear "module not found" error.)
+
+# Garmin Connect — for scripts/garmin_fetch.py, scripts/garmin_recovery.py
+garminconnect>=0.3.3
+
+# Strava — for scripts/strava_fetch.py (fallback / alternative source)
+stravalib>=2.0
+
+# Withings — for scripts/withings_fetch.py (weight, body composition, sleep)
+# Uses Withings REST API directly via `requests` (already a transitive dep of
+# garminconnect). No third-party Withings library is required because the
+# best-maintained option (withings-api 2.4) pins pydantic <2 and conflicts
+# with stravalib 2.x.

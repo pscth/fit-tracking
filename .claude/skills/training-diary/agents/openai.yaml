@@ -1,0 +1,5 @@
+interface:
+  display_name: Weight Loss Training Diary
+  short_description: Daily Strava and Withings training diary focused on fat loss and cycling readiness.
+  icon: bicyclist
+  primary_color: '#2E7D32'
