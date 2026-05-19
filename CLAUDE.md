@@ -1,9 +1,35 @@
-# Fit Tracking — Project Context
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project context
 
 This repo is a personal training diary toolkit. The `training-diary` skill
 (`.claude/skills/training-diary/SKILL.md`) governs the daily diary workflow.
 The user's specific goal (event prep, weight loss, performance, hypertrophy,
 etc.) is defined in `ATHLETE.md`.
+
+## Setup
+
+Python 3.12+ required. Install deps once:
+
+```bash
+python3 -m pip install --user -r requirements.txt
+```
+
+Each data source (Garmin / Strava / Withings) has its own one-time auth flow — see README for details. All three are independent; analyzers run standalone with no integration.
+
+## Architecture
+
+Three orthogonal data integrations feed one orchestrator:
+
+- **Garmin Connect** (`garminconnect` library) — recovery (`garmin_recovery.py`) + activity FITs (`garmin_fetch.py`); first-time auth via `garmin_auth.py`. Tokens at `~/.garminconnect/`.
+- **Strava** (`stravalib`) — `strava_fetch.py`, fallback / cross-check. Tokens at `~/.fit-tracking/strava_tokens.json`.
+- **Withings** — REST API direct via `requests` (no library — pydantic 2.x conflict with stravalib). `withings_fetch.py`. Tokens at `~/.fit-tracking/withings_tokens.json`.
+
+`daily.py` is the unattended orchestrator (cron-safe): pulls from each source, runs `analyze_fit.py` on the day's ride via `subprocess`, composes Markdown, writes `diary/YYYY-MM-DD.md`. Per-source failures degrade gracefully via `safe_call` — missing sources just elide their section, they don't abort the run. Analyzers (`analyze_fit.py`, `analyze_tcx.py`) have no integration dependency and work on any FIT/TCX file.
+
+Interactive flow (Claude session via the `training-diary` skill) is the "ceiling"; cron-driven `daily.py` is the "floor." Both write to the same `diary/` archive.
 
 ## Personal context lives in ATHLETE.md
 
@@ -53,6 +79,8 @@ python3 scripts/analyze_fit.py /path/to/ride.fit
 # TCX files (XML, stdlib only, no install)
 python3 scripts/analyze_tcx.py /path/to/ride.tcx
 ```
+
+`garmin_auth.py` is the one-time interactive Garmin login (handles MFA). Must run in a real TTY — not via Claude's `!` prefix or any non-interactive subshell. Reads `GARMIN_CONNECT_USER` / `GARMIN_CONNECT_PWD` env vars.
 
 `garmin_fetch.py` downloads activity files (FIT or TCX) directly from Garmin Connect using `garminconnect` (pip). Caches to `scripts/cache/` (gitignored). Credentials from `GARMIN_CONNECT_USER` / `GARMIN_CONNECT_PWD` env vars (passed to library at fresh-login time via `scripts/garmin_auth.py`); tokens cached to `~/.garminconnect/garmin_tokens.json`.
 
