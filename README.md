@@ -3,15 +3,16 @@
 **A daily training diary for athletes who don't want to juggle apps.**
 
 Every night, this repo pulls today's data from Garmin, Strava, and Withings;
-runs proper power analysis on the day's ride (Normalized Power, IF, TSS, HR
-drift, Pw:HR decoupling); composes a structured diary entry; and writes it
-to `diary/YYYY-MM-DD.md`. The day's training picture lands in one file
-before you go to bed — settled metrics, no morning copy-paste.
+runs proper power analysis on the day's ride(s), including indoor/virtual rides
+(Normalized Power, IF, TSS, HR drift, Pw:HR decoupling); composes a structured
+diary entry; and writes it to `diary/YYYY-MM-DD.md`. The day's training picture
+lands in one file before you go to bed — settled metrics, no morning copy-paste.
 
-Designed to pair with [Claude Code](https://claude.com/claude-code) — the
-included `training-diary` skill turns a "write today's diary" message into a
-tailored coaching session backed by all the same data. The scripts also run
-fully standalone for unattended use (cron / launchd / Raspberry Pi).
+Designed to pair with an AI coding agent — [Claude Code](https://claude.com/claude-code)
+or [Codex](https://openai.com/codex) — via the included `training-diary` skill,
+which turns a "write today's diary" message into a tailored coaching session
+backed by all the same data. The scripts also run fully standalone for
+unattended use (cron / launchd / Raspberry Pi).
 
 ---
 
@@ -139,12 +140,12 @@ python3 scripts/withings_fetch.py body --days 7
 ### Nutrition logging — manual (for now)
 
 Food intake doesn't have a clean automated source — none of Garmin, Strava, or
-Withings tracks what you eat. It's a **Claude-assisted manual flow**: tell
-Claude what you ate, Claude estimates macros from common-foods knowledge,
-appends a row to `diary/YYYY-MM-DD-food.md` with running totals, and flags
-when you're over or under target.
+Withings tracks what you eat. It's an **agent-assisted manual flow**: tell the
+agent what you ate, it estimates macros from common-foods knowledge, appends a
+row to `diary/YYYY-MM-DD-food.md` with running totals, and flags when you're
+over or under target.
 
-No standalone script. The Claude session does the calculation interactively,
+No standalone script. The agent session does the calculation interactively,
 and the file naming convention stays consistent with the rest of the diary.
 
 > **TODO:** wire up **MyFitnessPal** integration when their API becomes
@@ -186,7 +187,7 @@ missing.
 
 The diary always covers *today* — there's no date selector. For ad-hoc or
 backfill cases (regenerate a missed day, mid-day status check), use the
-interactive Claude flow via the `training-diary` skill instead.
+interactive agent flow via the `training-diary` skill instead.
 
 Common variants:
 
@@ -218,7 +219,7 @@ Two files hold your personal config (both gitignored — never committed):
 | File | What's in it |
 |---|---|
 | `scripts/athlete.json` | **Machine-readable:** FTP (watts), weight (kg), height, age, power zones, protein targets. Used by analysis scripts to compute W/kg, IF, TSS. |
-| `ATHLETE.md` | **Human-readable:** active fitness plan, biometric baseline, equipment, computed TDEE table, goal rules, reference rides. Read by Claude (interactive) for context. |
+| `ATHLETE.md` | **Human-readable:** active fitness plan, biometric baseline, equipment, computed TDEE table, goal rules, reference rides. Read by the agent (interactive) for context. |
 
 Copy the `.example` templates as starting points:
 
@@ -228,16 +229,26 @@ cp ATHLETE.example.md ATHLETE.md
 # Edit both with your numbers + plan
 ```
 
-The scripts, skill, and `CLAUDE.md` are generic — they work for any athlete
+The scripts, skill, and `PROJECT.md` are generic — they work for any athlete
 with any goal once your personal layer is filled in.
 
 ---
 
-## Pairing with Claude Code
+## Pairing with an AI coding agent
+
+The repo ships one source of project context plus thin per-agent pointers, so
+the same setup works with both Claude Code and Codex:
+
+| File | Role |
+|---|---|
+| `PROJECT.md` | Single source of truth: project context, architecture, conventions, coaching rules (tracked) |
+| `CLAUDE.md` | Pointer to `PROJECT.md` — auto-loaded by Claude Code (tracked) |
+| `AGENTS.md` | Pointer to `PROJECT.md` — auto-loaded by Codex (tracked) |
+| `PREFERENCES.md` | Your per-user language/tone preferences, read by both (gitignored) |
 
 The included `training-diary` skill
-(`.claude/skills/training-diary/SKILL.md`) turns an interactive Claude session
-into a coach:
+(`.claude/skills/training-diary/SKILL.md`) turns an interactive session into a
+coach:
 
 - Reads `ATHLETE.md` for your goal, plan, and rules
 - Pulls fresh data from all configured sources
@@ -246,10 +257,17 @@ into a coach:
 - Goes deeper than unattended `daily.py`: interprets cross-source signals,
   generates a real coach note in your tone
 
-**`daily.py` is the unattended floor. The Claude skill is the ceiling.** Both
-work; they don't conflict. Most people will use cron for the daily floor and
-Claude for ad-hoc deeper sessions (race-week planning, weekly review, race
-report).
+**Claude Code** auto-discovers the skill from `.claude/skills/`. **Codex** uses
+the same `SKILL.md` format — symlink it into your Codex skills directory once:
+
+```bash
+ln -s "$PWD/.claude/skills/training-diary" ~/.codex/skills/training-diary
+```
+
+**`daily.py` is the unattended floor. The agent skill is the ceiling.** Both
+work; they don't conflict. Most people use cron for the daily floor and an
+interactive agent session for ad-hoc deeper work (race-week planning, weekly
+review, race report).
 
 ---
 
@@ -292,7 +310,10 @@ change), rerun the relevant `--auth` flow.
 ```
 fit-tracking/
 ├── README.md                  # this file
-├── CLAUDE.md                  # generic project context (tracked)
+├── PROJECT.md                 # project context for AI agents — single source of truth (tracked)
+├── CLAUDE.md                  # pointer to PROJECT.md for Claude Code (tracked)
+├── AGENTS.md                  # pointer to PROJECT.md for Codex (tracked)
+├── PREFERENCES.md             # your language/tone prefs, read by both agents (gitignored)
 ├── ATHLETE.md                 # your personal profile + plan (gitignored)
 ├── ATHLETE.example.md         # template for ATHLETE.md
 ├── requirements.txt           # Python deps
@@ -335,8 +356,8 @@ the pip install.
 corresponding `--auth` flow.
 
 **`EOFError: EOF when reading a line`** during a `*_auth.py` script — running
-in a non-TTY subshell (or via the `!` prefix inside Claude). Open a regular
-terminal window and rerun.
+in a non-TTY subshell (or via an agent's inline-command prefix, e.g. Claude
+Code's `!`). Open a regular terminal window and rerun.
 
 **`ModuleNotFoundError: No module named 'X'`** — `pip install -r
 requirements.txt` didn't succeed or the wrong Python is being used. Check
@@ -348,6 +369,22 @@ developer dashboard alongside any existing URIs.
 
 **`Already authenticated`** when running `garmin_auth.py` — tokens are valid,
 nothing to do. Skip to using `daily.py`.
+
+---
+
+## Changelog
+
+- **2026-06-04** — Multi-agent support: `PROJECT.md` is now the single source of
+  project context, with `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) as
+  thin pointers, plus `PREFERENCES.md` for per-user language/tone. The
+  `training-diary` skill works with both agents via the shared `SKILL.md` format.
+- **2026-06-04** — `daily.py` now logs **every ride on the day** (not just one)
+  and recognizes indoor/virtual rides (e.g. Zwift `virtual_ride`); each ride
+  gets its own analyzed section, in chronological order.
+- **2026-06-02** — `analyze_fit.py`: corrected elevation-gain calculation.
+- **2026-05-19** — Initial release: Garmin / Strava / Withings integrations,
+  FIT/TCX power analysis (NP / IF / TSS / HR drift / Pw:HR decoupling), and the
+  `daily.py` orchestrator writing `diary/YYYY-MM-DD.md`.
 
 ---
 

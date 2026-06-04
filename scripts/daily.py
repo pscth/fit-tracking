@@ -111,13 +111,21 @@ def fetch_activities(g, n: int = 20) -> list:
         return []
 
 
-def find_today_ride(activities: list, target_date: str) -> dict | None:
+def find_today_rides(activities: list, target_date: str) -> list:
+    """All cycling activities on target_date, chronological (earliest first)."""
+    rides = []
     for a in activities:
         start_local = (a.get("startTimeLocal") or "")[:10]
         sport = ((a.get("activityType") or {}).get("typeKey") or "").lower()
-        if start_local == target_date and "cycling" in sport:
-            return a
-    return None
+        # Garmin cycling typeKeys: cycling, road_biking, mountain_biking,
+        # gravel_cycling, indoor_cycling, virtual_ride (Zwift), etc. Not all
+        # contain "cycling" — match the "biking"/"ride" variants too.
+        is_cycling = any(tok in sport for tok in ("cycling", "biking", "ride"))
+        if start_local == target_date and is_cycling:
+            rides.append(a)
+    # Garmin returns newest-first; show chronological so an FTP test logged
+    # before an easy spin reads in the order it happened.
+    return list(reversed(rides))
 
 
 def ensure_fit_cached(activity_id: str) -> Path | None:
@@ -397,24 +405,27 @@ def compose_training(activities: list, target_date: str) -> str:
     return "\n".join(lines)
 
 
-def compose_today_session(today_ride: dict | None, ride_analysis: str | None) -> str:
-    if not today_ride:
+def compose_today_session(today_rides: list) -> str:
+    """today_rides: list of (activity, analysis_str|None) tuples, chronological."""
+    if not today_rides:
         return "## Today's session\n\n_No cycling activity on Garmin for this date._"
-    name = today_ride.get("activityName", "?")
-    aid = today_ride.get("activityId", "?")
-    lines = [
-        f"## Today's session (completed)",
-        f"",
-        f"**{name}** (Garmin activity {aid})",
-        f"",
-    ]
-    if ride_analysis:
-        lines.append("```")
-        lines.append(ride_analysis.rstrip())
-        lines.append("```")
-    else:
-        lines.append("_Ride analysis unavailable — FIT file could not be downloaded or analyzed._")
-    return "\n".join(lines)
+    multiple = len(today_rides) > 1
+    lines = ["## Today's session (completed)", ""]
+    for activity, ride_analysis in today_rides:
+        name = activity.get("activityName", "?")
+        aid = activity.get("activityId", "?")
+        # One ride keeps the original bold heading; multiple get H3 subsections.
+        lines.append(f"### {name} (Garmin activity {aid})" if multiple
+                     else f"**{name}** (Garmin activity {aid})")
+        lines.append("")
+        if ride_analysis:
+            lines.append("```")
+            lines.append(ride_analysis.rstrip())
+            lines.append("```")
+        else:
+            lines.append("_Ride analysis unavailable — FIT file could not be downloaded or analyzed._")
+        lines.append("")
+    return "\n".join(lines).rstrip()
 
 
 def compose_nutrition(athlete: dict, target_date: str) -> str:
@@ -432,7 +443,7 @@ def compose_nutrition(athlete: dict, target_date: str) -> str:
 
 
 def compose_diary(target_date: str, athlete: dict, recovery: dict, activities: list,
-                  withings_body: list, today_ride: dict | None, ride_analysis: str | None) -> str:
+                  withings_body: list, today_rides: list) -> str:
     sections = [
         f"# Training & Weight Diary — {target_date}",
         "",
@@ -444,7 +455,7 @@ def compose_diary(target_date: str, athlete: dict, recovery: dict, activities: l
         "",
         compose_recovery(recovery),
         "",
-        compose_today_session(today_ride, ride_analysis),
+        compose_today_session(today_rides),
         "",
         compose_nutrition(athlete, target_date),
         "",
@@ -484,7 +495,7 @@ def main() -> None:
 
     log(f"[3/5] Garmin activities (last 7 days + today)...")
     activities = fetch_activities(g, n=20)
-    today_ride = None if args.no_ride else find_today_ride(activities, target)
+    today_rides = [] if args.no_ride else find_today_rides(activities, target)
 
     log(f"[4/5] Withings body composition (last 7 days)...")
     w_tokens = load_withings_tokens()
@@ -496,18 +507,19 @@ def main() -> None:
     else:
         log("    (Withings not configured — skipping body composition section)")
 
-    ride_analysis = None
-    if today_ride:
-        aid = str(today_ride["activityId"])
-        log(f"[5/5] Today's ride detected (id {aid}). Caching FIT + analyzing...")
-        fit_path = ensure_fit_cached(aid)
-        if fit_path:
-            ride_analysis = analyze_ride(fit_path)
+    ride_results = []
+    if today_rides:
+        log(f"[5/5] {len(today_rides)} ride(s) detected for {target}. Caching FIT + analyzing...")
+        for a in today_rides:
+            aid = str(a["activityId"])
+            fit_path = ensure_fit_cached(aid)
+            analysis = analyze_ride(fit_path) if fit_path else None
+            ride_results.append((a, analysis))
     else:
         log(f"[5/5] No ride for {target} (or --no-ride). Skipping analysis.")
 
     log("Composing diary entry...")
-    md = compose_diary(target, athlete, recovery, activities, withings_body, today_ride, ride_analysis)
+    md = compose_diary(target, athlete, recovery, activities, withings_body, ride_results)
 
     if args.dry_run:
         print(md)

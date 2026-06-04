@@ -4,8 +4,9 @@ scripts/athlete.json
 scripts/cache/
 diary/
 
-# Local Claude Code settings (per-machine)
+# Per-user agent settings + preferences (per-machine)
 .claude/settings.local.json
+PREFERENCES.md
 
 # Python / OS noise
 __pycache__/
