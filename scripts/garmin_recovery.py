@@ -53,6 +53,19 @@ def is_err(x) -> bool:
     return isinstance(x, dict) and "_error" in x
 
 
+def unavailable_reason(x, fallback: str = "unknown") -> str:
+    """Describe unexpected / empty Garmin payloads without crashing."""
+    if is_err(x):
+        return x.get("_error", fallback)
+    if isinstance(x, list):
+        return "empty list" if not x else f"unexpected list ({len(x)} items)"
+    if x is None:
+        return "no data"
+    if isinstance(x, dict):
+        return fallback
+    return f"unexpected {type(x).__name__}"
+
+
 def fmt_dur(seconds) -> str:
     if seconds is None:
         return "—"
@@ -115,7 +128,7 @@ def main() -> None:
         if fb:
             kv("Feedback:", fb)
     else:
-        print(f"(unavailable: {tr.get('_error', 'unknown')})")
+        print(f"(unavailable: {unavailable_reason(tr)})")
 
     # --- HRV ---
     section("HEART RATE VARIABILITY (overnight RMSSD, ms)")
@@ -127,7 +140,7 @@ def main() -> None:
         kv("Status:", summary.get("status"))
         kv("Baseline range:", f"{summary.get('baseline', {}).get('lowUpper', '—')}–{summary.get('baseline', {}).get('balancedUpper', '—')} ms")
     else:
-        print(f"(unavailable: {hrv.get('_error', 'unknown') if is_err(hrv) else 'no hrvSummary'})")
+        print(f"(unavailable: {unavailable_reason(hrv, 'no hrvSummary')})")
 
     # --- Sleep ---
     section("SLEEP")
@@ -147,7 +160,7 @@ def main() -> None:
         kv("Awake:", fmt_dur(awake))
         kv("Score (0-100):", overall)
     else:
-        print(f"(unavailable: {sleep.get('_error', 'unknown') if is_err(sleep) else 'no dailySleepDTO'})")
+        print(f"(unavailable: {unavailable_reason(sleep, 'no dailySleepDTO')})")
 
     # --- RHR ---
     section("RESTING HEART RATE")
@@ -162,7 +175,7 @@ def main() -> None:
             # Some responses surface RHR at top level
             kv("Today:", rhr.get("restingHeartRate"), " bpm")
     else:
-        print(f"(unavailable: {rhr.get('_error', 'unknown')})")
+        print(f"(unavailable: {unavailable_reason(rhr)})")
 
     # --- Body Battery ---
     section("BODY BATTERY (Garmin composite 0-100)")
@@ -184,7 +197,7 @@ def main() -> None:
                 sign = "+" if isinstance(impact, (int, float)) and impact >= 0 else ""
                 kv(f"  {kind.title()} impact:", f"{sign}{impact}", f"  ({fb})" if fb and fb != "NONE" else "")
     else:
-        print(f"(unavailable: {bb.get('_error', 'unknown') if is_err(bb) else 'no data'})")
+        print(f"(unavailable: {unavailable_reason(bb, 'no data')})")
 
     # --- Activity & Steps ---
     section("ACTIVITY & STEPS")
@@ -207,7 +220,7 @@ def main() -> None:
         if isinstance(floors, (int, float)) and floors > 0:
             kv("Floors ascended:", int(floors))
     else:
-        print(f"(unavailable: {stats.get('_error', 'unknown') if is_err(stats) else 'no data'})")
+        print(f"(unavailable: {unavailable_reason(stats, 'no data')})")
 
     print()
     print("(Re-run with --raw to dump full JSON responses for any field that shows '—')")

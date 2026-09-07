@@ -1,8 +1,11 @@
 # Per-user data — never commit
 ATHLETE.md
+KNOWN_FOODS.md
 scripts/athlete.json
 scripts/cache/
 diary/
+research/sports-science/papers/
+research/sports-science/pubmed-records.xml
 
 # Per-user agent settings + preferences (per-machine)
 .claude/settings.local.json

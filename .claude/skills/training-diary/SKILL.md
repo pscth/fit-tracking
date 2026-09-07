@@ -13,6 +13,7 @@ Maintain a practical daily training diary that combines training data, body-weig
 1. **`ATHLETE.md`** — the active fitness plan, biometric baseline, equipment, operational defaults (TDEE, carb/hydration rules, tracking protocol), and reference rides. Defines what "the goal" is for this athlete and which rules apply. **If `ATHLETE.md` is missing, ask the user to copy `ATHLETE.example.md` and fill it in before proceeding.**
 2. **`scripts/athlete.json`** — numeric constants (FTP, weight, power zones, protein targets) consumed by analysis scripts.
 3. **Recent entries in `diary/`** — historical context for trends, recovery, and what was prescribed.
+4. **`research/sports-science/EVIDENCE_BASE.md`** — reviewed decision rules for load, taper, HRV, sleep, fueling, body mass, and caffeine. Use its source IDs selectively; do not turn the diary into a literature dump.
 
 ## Data sources
 Use available connectors / scripts in this priority order:
@@ -31,7 +32,7 @@ A diary entry for date **D** is anchored to a single date:
 - **Data for D** — everything observed *for* date D. Body comp (morning weigh-in), Garmin recovery (sleep / RHR / HRV / Training Readiness), training activities completed on D, daily activity totals (steps / intensity minutes / active kcal), event countdown.
 - **Plan for D+1** — the only forward-looking content. Nutrition target for tomorrow, planned session(s), next actions.
 
-The unattended `scripts/daily.py` runs at end-of-day, so D is always settled when written. For ad-hoc / backfill work (regenerate a missed day, rewrite a past entry, mid-day status check), use the interactive `training-diary` skill in a Claude session — those flows can reason about partial in-flight metrics if needed.
+The unattended `scripts/daily.py` runs at end-of-day, so D is always settled when written. For ad-hoc / backfill work (regenerate a missed day, rewrite a past entry, mid-day status check), use the interactive `training-diary` skill in an LLM session — those flows can reason about partial in-flight metrics if needed.
 
 **Training table vs Today's session.** D's actual ride/session goes in its own "Today's session" block (with the detailed analysis). The 7-day training table is *load-context only* — D-7 through D-1, excluding D — so the same ride is never logged twice in the same entry.
 
@@ -52,7 +53,7 @@ duplicate the food log; it references it when nutrition is relevant (e.g.
 "see [2026-05-19-food.md](./2026-05-19-food.md) for fueling details").
 
 **No automated source** for nutrition data exists yet (none of Garmin /
-Strava / Withings tracks food intake). The food log is a Claude-assisted
+Strava / Withings tracks food intake). The food log is an LLM-assisted
 manual flow:
 
 1. **Trigger:** user describes a meal or snack in natural language
@@ -140,8 +141,9 @@ For each diary request:
 7. Summarize training load using available metrics (activity type, distance, duration, elevation, avg/normalized power, avg/max HR, RPE if provided).
 8. Estimate the day type (rest / recovery / easy endurance / moderate / hard / long / event day).
 9. Give a nutrition target for **D+1** **using the rules + targets defined in `ATHLETE.md`** (calories, protein, carbs, fat, hydration). Don't invent generic numbers when `ATHLETE.md` defines specific ones.
-10. Produce the diary entry in the standard format below.
-11. Persist to `diary/YYYY-MM-DD.md`.
+10. Apply `research/sports-science/EVIDENCE_BASE.md` to the actual decision. Select zero to three relevant source IDs, state extrapolation limits, and never let a single metric or paper override the multi-signal picture.
+11. Produce the diary entry in the standard format below. If evidence materially changes the recommendation, add one concise `Evidence basis:` line in the coach note with source IDs and the decision they support.
+12. Persist to `diary/YYYY-MM-DD.md`.
 
 ## Standard output format
 Use this format for the daily training diary:
@@ -181,6 +183,7 @@ Use this format for the daily training diary:
 
 ## Coach note
 Short, direct advice tied to the active goal and current phase from ATHLETE.md.
+Evidence basis: [only when material; e.g. S06 + S07 — HRV trend is contextual, so load/sleep/soreness determine tomorrow's prescription]
 
 ## Next actions (look-forward)
 1. [training action]

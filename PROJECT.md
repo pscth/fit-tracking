@@ -43,6 +43,17 @@ operational defaults (TDEE / carb / hydration), and reference rides are in
 [ATHLETE.md](./ATHLETE.md) (gitignored — never committed).** The agent should read
 it at session start whenever it exists.
 
+If present, also read **`KNOWN_FOODS.md`** (gitignored). It is the personal
+nutrition reference for branded products and recurrent foods in the user's diet,
+used to keep food-log estimates consistent across days instead of re-estimating
+the same items from scratch every time.
+
+Also read **`research/sports-science/EVIDENCE_BASE.md`** when making a coaching
+evaluation or prescription. It contains the reviewed evidence rules and source
+IDs used by the diary workflow. The downloaded source library is indexed in
+`research/sports-science/README.md`; source binaries are local-only and
+gitignored.
+
 If `ATHLETE.md` is missing (fresh clone, fork), see `ATHLETE.example.md` for
 the expected structure and `scripts/athlete.example.json` for the numeric-config
 template.
@@ -76,6 +87,8 @@ Behavioral rules calibrated from prior sessions. Apply in any session in this re
 - `PROJECT.md` — this file. Single source of truth for project context, conventions, tooling.
 - `CLAUDE.md` / `AGENTS.md` — thin pointers to `PROJECT.md` so Claude Code and Codex share one source. `PREFERENCES.md` (gitignored) holds per-user language/tone preferences; both agents are pointed at it.
 - `ATHLETE.md` — personal profile + active plan + biometric baseline (gitignored). See `ATHLETE.example.md` for structure.
+- `KNOWN_FOODS.md` — personal nutrition reference for recurring foods and branded products (gitignored). Use it to stabilize food-log estimates across sessions.
+- `research/sports-science/` — versioned evidence synthesis and source index; downloaded papers are local-only.
 - `README.md` — user-facing setup + usage docs.
 - `diary/` — daily entries (gitignored). See "Diary archive" above for naming convention.
 - `scripts/` — Python analysis + Garmin Connect tooling. See "Analysis scripts" below.
